@@ -1,16 +1,18 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const otpRoutes = require('./routes/otpRoutes');
-const dbInit = require('./database/init'); // Asegura que las tablas estén creadas
+const otpRoutes = require('./src/routes/otpRoutes');
+const dbInit = require('./src/database/init'); // Importa la función de inicialización
 
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware para analizar el cuerpo de la solicitud como JSON
-app.use(express.json())
+// Inicializa la base de datos
+dbInit();
 
+// Middleware
+app.use(express.json());
 app.use(bodyParser.json());
 app.use('/api', otpRoutes);
 

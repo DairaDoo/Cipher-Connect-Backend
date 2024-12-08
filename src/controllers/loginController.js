@@ -1,28 +1,49 @@
 const db = require('../database/db');
-const { saveOtp } = require('../controllers/otpController'); // Importamos solo la función saveOtp
+const { saveOtp } = require('./otpController');
 
-// Verificar si el username y la contraseña son correctos
+// Generar OTP
+const generateOtp = () => Math.floor(100000 + Math.random() * 900000); // OTP de 6 dígitos
+
+// Login con generación de OTP
 const login = (username, password, callback) => {
-  console.log('Buscando usuario con username:', username); // Esto debería mostrarte el nombre de usuario en la consola
-  
   db.get('SELECT id, email, password FROM users WHERE username = ?', [username], (err, row) => {
     if (err) return callback('Error finding user.');
-    if (!row) return callback('User not found.'); // Si el usuario no se encuentra, devolvemos un error
+    if (!row) return callback('User not found.');
+    if (password !== row.password) return callback('Invalid credentials.');
 
-    console.log('Usuario encontrado:', row); // Verifica que esta línea esté siendo ejecutada
-
-    if (password !== row.password) return callback('Invalid credentials.'); // Compara la contraseña
-
-    // Continuar con el OTP si la contraseña es correcta
-    const otp = Math.floor(100000 + Math.random() * 900000); // OTP de 6 dígitos
+    const otp = generateOtp();
     const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutos
 
-    // Guardar OTP
-    saveOtp(row.email, otp, expiresAt, (err, message) => {
+    // Llamamos a la función saveOtp para actualizar el OTP asociado con el usuario
+    saveOtp(row.email, otp, expiresAt, (err) => {
       if (err) return callback(err);
-      return callback(null, 'OTP generated successfully. Please check your email.');
+      return callback(null, { message: 'OTP generated successfully.', email: row.email });
     });
   });
 };
 
-module.exports = { login };
+// Verificar OTP
+const verifyOtp = (username, password, otp, callback) => {
+  // Verificar si las credenciales son correctas
+  db.get('SELECT id, email FROM users WHERE username = ? AND password = ?', [username, password], (err, row) => {
+    if (err) return callback('Error finding user.');
+    if (!row) return callback('User not found.');
+    if (password !== row.password) return callback('Invalid credentials.');
+
+    // Verificar OTP
+    db.get(
+      'SELECT otp, expires_at FROM otps WHERE user_id = ?',
+      [row.id],
+      (err, otpRow) => {
+        if (err) return callback('Error retrieving OTP.');
+        if (!otpRow) return callback('OTP not found.');
+        if (otpRow.otp !== otp) return callback('Invalid OTP.');
+        if (Date.now() > otpRow.expires_at) return callback('OTP expired.');
+
+        return callback(null, 'OTP verified successfully. Access granted.');
+      }
+    );
+  });
+};
+
+module.exports = { login, verifyOtp };
